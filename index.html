@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendario de Vacaciones</title>
+
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    #calendar {
+      max-width: 1100px;
+      margin: 0 auto 40px auto;
+      background: #fff;
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    table {
+      width: 520px;
+      margin: 0 auto;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #222;
+      color: #fff;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    small {
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Calendario de Vacaciones del Equipo</h2>
+<div id="calendar"></div>
+
+<h2>Resumen de Vacaciones</h2>
+<table id="summaryTable">
+  <thead>
+    <tr>
+      <th>Colaborador</th>
+      <th>Días consumidos</th>
+      <th>Días agendados</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  /* ================= CONFIGURACIÓN ================= */
+  const TOTAL_DAYS_PER_USER = 15;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  /* ================= HELPERS ================= */
+
+  function parseLocalDate(dateStr) {
+    return new Date(dateStr + 'T00:00:00');
+  }
+
+  function dayValue(date) {
+    const day = date.getDay(); // 0=domingo, 6=sábado
+    if (day === 6) return 0.5;
+    if (day === 0) return 0;
+    return 1;
+  }
+
+  /* ================= DÍAS HISTÓRICOS ================= */
+  const previousConsumed = {};
+
+  /* ================= EVENTOS ================= */
+  const events = [
+    // NOÉ
+    { title: 'Noé', start: '2025-12-08', end: '2025-12-10' },
+    { title: 'Noé', start: '2026-01-02' },
+    { title: 'Noé', start: '2026-01-08', end: '2026-01-10' },
+    { title: 'Noé', start: '2026-02-02', end: '2026-02-05' },
+    { title: 'Noé', start: '2026-03-02', end: '2026-03-05' },
+    { title: 'Noé', start: '2026-04-13', end: '2026-04-16' },
+    { title: 'Noé', start: '2026-05-04' },
+
+    // LUIS
+    { title: 'Luis', start: '2025-11-25' },
+    { title: 'Luis', start: '2026-01-05', end: '2026-01-08' },
+    { title: 'Luis', start: '2026-02-16' },
+    { title: 'Luis', start: '2026-03-11', end: '2026-03-13' },
+    { title: 'Luis', start: '2026-03-31', end: '2026-04-02' },
+    { title: 'Luis', start: '2026-04-28' },
+    { title: 'Luis', start: '2026-05-18', end: '2026-05-20' },
+
+    // FRANCISCO
+    { title: 'Francisco', start: '2025-07-21', end: '2025-07-26' },
+    { title: 'Francisco', start: '2025-10-13' },
+    { title: 'Francisco', start: '2025-10-27', end: '2025-10-29' },
+    { title: 'Francisco', start: '2025-11-21' },
+    { title: 'Francisco', start: '2026-01-31' },
+    { title: 'Francisco', start: '2026-02-09' },
+    { title: 'Francisco', start: '2026-02-28' },
+    { title: 'Francisco', start: '2026-03-07' },
+    { title: 'Francisco', start: '2026-03-28' },
+    { title: 'Francisco', start: '2026-04-11' },
+    { title: 'Francisco', start: '2026-04-25' },
+
+    // JAVIER
+    { title: 'Javier', start: '2026-01-22', end: '2026-01-24' },
+    { title: 'Javier', start: '2026-02-18', end: '2026-02-21' },
+    { title: 'Javier', start: '2026-02-26', end: '2026-02-28' },
+    { title: 'Javier', start: '2026-03-19', end: '2026-03-21' },
+    { title: 'Javier', start: '2026-04-29', end: '2026-05-01' },
+    { title: 'Javier', start: '2026-05-07', end: '2026-05-09' },
+    { title: 'Javier', start: '2026-05-21', end: '2026-05-23' },
+  ];
+
+  /* ================= CONTADORES ================= */
+  const consumedCounters = {};
+  const scheduledCounters = {};
+
+  function countConsumed(event) {
+    const start = parseLocalDate(event.start);
+
+    if (!event.end) {
+      return start < today ? dayValue(start) : 0;
+    }
+
+    const end = parseLocalDate(event.end);
+    let count = 0;
+
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      if (d < today) count += dayValue(d);
+    }
+
+    return count;
+  }
+
+  function countScheduled(event) {
+    const start = parseLocalDate(event.start);
+
+    if (!event.end) {
+      return dayValue(start);
+    }
+
+    const end = parseLocalDate(event.end);
+    let count = 0;
+
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      count += dayValue(d);
+    }
+
+    return count;
+  }
+
+  events.forEach(ev => {
+    if (!consumedCounters[ev.title]) {
+      consumedCounters[ev.title] = previousConsumed[ev.title] || 0;
+    }
+    if (!scheduledCounters[ev.title]) {
+      scheduledCounters[ev.title] = 0;
+    }
+
+    consumedCounters[ev.title] += countConsumed(ev);
+    scheduledCounters[ev.title] += countScheduled(ev);
+  });
+
+  /* ================= CALENDARIO ================= */
+  const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+    initialView: 'dayGridMonth',
+    locale: 'es',
+    height: 'auto',
+    showNonCurrentDates: false,
+    fixedWeekCount: false,
+
+    eventDidMount(info) {
+      const date = parseLocalDate(info.event.startStr);
+      if (date < today) {
+        info.el.style.backgroundColor = '#2ecc71';
+        info.el.style.borderColor = '#27ae60';
+      }
+    },
+
+    events
+  });
+
+  calendar.render();
+
+  /* ================= TABLA ================= */
+  const tbody = document.querySelector('#summaryTable tbody');
+
+  Object.keys(consumedCounters).forEach(name => {
+    const consumed = consumedCounters[name];
+    const scheduled = scheduledCounters[name];
+    const pending = Math.max(TOTAL_DAYS_PER_USER - scheduled, 0);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${name}</td>
+      <td>${consumed.toFixed(1)}</td>
+      <td>
+        ${scheduled.toFixed(1)} días<br/>
+        <small>(pendientes agendar ${pending.toFixed(1)} días)</small>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+});
+</script>
+
+</body>
+</html>
